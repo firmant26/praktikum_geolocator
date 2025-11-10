@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:geocoding/geocoding.dart'; // menambahkan ini
 
 void main() {
   runApp(MyApp());
@@ -27,55 +28,61 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  // --- Variabel State Utama ---
-  Position? _currentPosition; // Menyimpan data lokasi
-  String? _errorMessage; // Menyimpa pesan error
-  StreamSubscription<Position>? _positionStream; // Penyimpan stream
-
-  // Variabel untuk Latihan 1 dan 2 telah dihapus dari versi ini
+  Position? _currentPosition;
+  String? _errorMessage;
+  StreamSubscription<Position>? _positionStream;
+  String? _currentAddress; // menambahkan variabel alamat
 
   @override
   void dispose() {
-    // PENTING: Selalu batalkan stream saat widget dihancurkan
     _positionStream?.cancel();
     super.dispose();
   }
-
-  
 
   Future<Position> _getPermissionAndLocation() async {
     bool serviceEnabled;
     LocationPermission permission;
 
-    // 1. Cek apakah layanan lokasi (GPS) di perangkat aktif
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      // Jika tidak aktif, kirim error
       return Future.error('Layanan lokasi tidak aktif. Harap aktifkan GPS.');
     }
 
-    // 2. Cek izin lokasi dari aplikasi
     permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
-      // Jika ditolak, minta izin
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
-        // Jika tetap ditolak, kirim error
         return Future.error('Izin lokasi ditolak.');
       }
     }
 
     if (permission == LocationPermission.deniedForever) {
-      // Jika ditolak permanen, kirim error
       return Future.error(
         'Izin lokasi ditolak permanen. Harap ubah di pengaturan aplikasi.',
       );
     }
 
-    // 3. Jika izin diberikan, ambil lokasi saat ini
     return await Geolocator.getCurrentPosition(
       desiredAccuracy: LocationAccuracy.high,
     );
+  }
+
+  // menambahkan Fungsi baru untuk mengubah Lat/Lng menjadi alamat
+  Future<void> _getAddressFromLatLng(Position position) async {
+    try {
+      List<Placemark> placemarks =
+          await placemarkFromCoordinates(position.latitude, position.longitude);
+
+      Placemark place = placemarks[0];
+      setState(() {
+        _currentAddress =
+            "${place.street}, ${place.subLocality}, ${place.locality}, ${place.administrativeArea}, ${place.country}";
+      });
+    } catch (e) {
+      setState(() {
+        _currentAddress = "Gagal mendapatkan alamat: $e";
+      });
+    }
   }
 
   void _handleGetLocation() async {
@@ -83,13 +90,12 @@ class _MyHomePageState extends State<MyHomePage> {
       Position position = await _getPermissionAndLocation();
       setState(() {
         _currentPosition = position;
-        _errorMessage = null; // Hapus error jika sukses
+        _errorMessage = null;
       });
-
-      // Fungsi Latihan 1 & 2 dihapus dari sini
+      await _getAddressFromLatLng(position); // menambahkan panggilan
     } catch (e) {
       setState(() {
-        _errorMessage = e.toString(); // Tampilkan error di UI
+        _errorMessage = e.toString();
       });
     }
   }
@@ -99,22 +105,19 @@ class _MyHomePageState extends State<MyHomePage> {
 
     final LocationSettings locationSettings = LocationSettings(
       accuracy: LocationAccuracy.high,
-      distanceFilter: 10, // Update setiap ada pergerakan 10 meter
+      distanceFilter: 10,
     );
 
     try {
-      // Mulai mendengarkan stream
       _positionStream =
-          Geolocator.getPositionStream(
-            locationSettings: locationSettings,
-          ).listen((Position position) {
-            setState(() {
-              _currentPosition = position;
-              _errorMessage = null;
-            });
-
-           
-          });
+          Geolocator.getPositionStream(locationSettings: locationSettings)
+              .listen((Position position) {
+        setState(() {
+          _currentPosition = position;
+          _errorMessage = null;
+        });
+        _getAddressFromLatLng(position); // menambahkan panggilan
+      });
     } catch (e) {
       setState(() {
         _errorMessage = e.toString();
@@ -123,13 +126,12 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   void _handleStopTracking() {
-    _positionStream?.cancel(); // Hentikan stream
+    _positionStream?.cancel();
     setState(() {
       _errorMessage = "Pelacakan dihentikan.";
     });
   }
 
-  // --- TAMPILAN (UI) ---
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -143,40 +145,42 @@ class _MyHomePageState extends State<MyHomePage> {
               children: [
                 Icon(Icons.location_on, size: 50, color: Colors.blue),
                 SizedBox(height: 16),
-
-                // --- Area Tampilan Informasi ---
                 ConstrainedBox(
                   constraints: BoxConstraints(minHeight: 150),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // Tampilkan Error
                       if (_errorMessage != null)
                         Text(
                           _errorMessage!,
                           style: TextStyle(color: Colors.red, fontSize: 16),
                           textAlign: TextAlign.center,
                         ),
-
                       SizedBox(height: 16),
-
-                      // Tampilkan Posisi (Lat/Lng)
                       if (_currentPosition != null)
-                        Text(
-                          "Lat: ${_currentPosition!.latitude}\nLng: ${_currentPosition!.longitude}",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
+                        Column(
+                          children: [
+                            Text(
+                              "Lat: ${_currentPosition!.latitude}\nLng: ${_currentPosition!.longitude}",
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            SizedBox(height: 12),
+                            if (_currentAddress != null)
+                              Text(
+                                "Alamat:\n$_currentAddress",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(fontSize: 16),
+                              ),
+                          ],
                         ),
                     ],
                   ),
                 ),
-
                 SizedBox(height: 32),
-
-                //
                 ElevatedButton.icon(
                   icon: Icon(Icons.location_searching),
                   label: Text('Dapatkan Lokasi Sekarang'),
