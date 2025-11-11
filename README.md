@@ -1,4 +1,4 @@
-![WhatsApp Image 2025-11-11 at 23 29 32_110d1fcf](https://github.com/user-attachments/assets/091a473d-d425-4792-8eea-a33b4ca44349)# PRAKTIKUM API CRUD
+# PRAKTIKUM API CRUD
 
 NAMA  : MOCH FIRMAN TRISWANDA
 NIM   : 362458302013
